@@ -23,21 +23,28 @@ provider:
           - "s3:PutObjectVersionTagging"
           - "s3:ListBucket"
           - "s3:ListBucketVersions"
-        Resource: { "Fn::Join": ["", ["arn:aws:s3:::", "${opt:env_name}-financial-documents", "/*" ] ]  }
+        Resource:
+          - "arn:aws:s3:::${opt:env_name}-financial-documents/*"
+          - "arn:aws:s3:::${opt:env_name}-*-documents/*"
       - Effect: "Allow"
         Action:
-          - "s3:GetObject"
-          - "s3:GetObjectTagging"
-          - "s3:PutObjectTagging",
-          - "s3:PutObjectVersionTagging"
-          - "s3:ListBucket"
-          - "s3:ListBucketVersions"
-        Resource: { "Fn::Join": ["", ["arn:aws:s3:::", "${opt:env_name}-*-documents", "/*" ] ]  }
-
+          - "sqs:ListQueues"
+          - "sqs:ReceiveMessage"
+          - "sqs:DeleteMessage"
+          - "sqs:ChangeMessageVisibility"
+        Resource:
+          - "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_conductor_schedule_3_hours"
+          - "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_document_file_received"
+      - Effect: "Allow"
+        Action:
+          - "sns:Publish"
+        Resource:
+          - "arn:aws:sns:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_s3_file_scanned"
 
   environment:
       ENV_NAME: ${opt:env_name}
       AV_DEFINITION_S3_BUCKET: ${opt:av_definition_bucket}
+      AV_STATUS_SNS_ARN: "arn:aws:sns:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_s3_file_scanned"
 
 package:
   artifact: build/lambda.zip
@@ -59,5 +66,5 @@ functions:
     handler: scan.lambda_handler
     events:
       - sqs:
-         arn: "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_document_s3_file_need_virus_scan"
+         arn: "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_document_file_received"
          batchSize: 1
