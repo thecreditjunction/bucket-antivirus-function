@@ -109,4 +109,4 @@ ENV/
 .DS_Store
 
 # serverless
-.serverless
+.serverless/*
