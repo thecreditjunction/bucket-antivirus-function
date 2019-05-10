@@ -1,0 +1,70 @@
+service: ${opt:env_name}-s3-virus-scan
+
+frameworkVersion: ">=1.2.0 <2.0.0"
+
+provider:
+  name: aws
+  runtime: python2.7
+  region: ${opt:aws_region}
+  iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "s3:GetObject"
+          - "s3:GetObjectTagging"
+          - "s3:PutObject"
+          - "s3:PutObjectTagging"
+          - "s3:PutObjectVersionTagging"
+        Resource: { "Fn::Join": ["", ["arn:aws:s3:::", "${opt:av_definition_bucket}", "/*" ] ]  }
+      - Effect: "Allow"
+        Action:
+          - "s3:GetObject"
+          - "s3:GetObjectTagging"
+          - "s3:PutObjectTagging"
+          - "s3:PutObjectVersionTagging"
+          - "s3:ListBucket"
+          - "s3:ListBucketVersions"
+        Resource:
+          - "arn:aws:s3:::${opt:env_name}-financial-documents/*"
+          - "arn:aws:s3:::${opt:env_name}-*-documents/*"
+      - Effect: "Allow"
+        Action:
+          - "sqs:ListQueues"
+          - "sqs:ReceiveMessage"
+          - "sqs:DeleteMessage"
+          - "sqs:ChangeMessageVisibility"
+        Resource:
+          - "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_conductor_schedule_3_hours"
+          - "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_document_file_received"
+      - Effect: "Allow"
+        Action:
+          - "sns:Publish"
+        Resource:
+          - "arn:aws:sns:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_s3_file_scanned"
+
+  environment:
+      ENV_NAME: ${opt:env_name}
+      AV_DEFINITION_S3_BUCKET: ${opt:av_definition_bucket}
+      AV_STATUS_SNS_ARN: "arn:aws:sns:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_s3_file_scanned"
+
+package:
+  artifact: build/lambda.zip
+
+functions:
+  bucket-antivirus-update:
+    timeout: 300
+    memorySize: 512
+    name: ${opt:env_name}-antivirus-update
+    handler: update.lambda_handler
+    events:
+      - sqs:
+         arn: "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_conductor_schedule_3_hours"
+         batchSize: 1
+  bucket-antivirus-scanning:
+    timeout: 300
+    memorySize: 1024
+    name: ${opt:env_name}-antivirus-scanning
+    handler: scan.lambda_handler
+    events:
+      - sqs:
+         arn: "arn:aws:sqs:${opt:aws_region}:${opt:aws_account}:${opt:env_name}_document_file_received"
+         batchSize: 1
